@@ -129,3 +129,10 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+HATTRICK_CONSUMER_KEY = config("HATTRICK_CONSUMER_KEY")
+HATTRICK_CONSUMER_SECRET = config("HATTRICK_CONSUMER_SECRET")
+HATTRICK_CALLBACK_URL = "http://localhost:8000/hattrick/callback/"
+HATTRICK_REQUEST_TOKEN_URL = 'https://chpp.hattrick.org/oauth/request_token.ashx'
+HATTRICK_AUTHORIZE_URL = 'https://chpp.hattrick.org/oauth/authorize.aspx'
+HATTRICK_ACCESS_TOKEN_URL = 'https://chpp.hattrick.org/oauth/access_token.ashx'
