@@ -61,3 +61,54 @@ def hattrick_callback(request):
         'access_token': access_token,
         'access_token_secret': access_token_secret,
     })
+
+
+def hattrick_test_endpoint(request):
+    # Example: call a protected resource using stored access tokens
+    
+    access_token = request.session.get('access_token')
+    access_token_secret = request.session.get('access_token_secret')
+    
+    if not access_token or not access_token_secret:
+        return redirect('hattrick_login')  # or show error
+    
+    oauth = OAuth1Session(
+        settings.HATTRICK_CONSUMER_KEY,
+        client_secret=settings.HATTRICK_CONSUMER_SECRET,
+        resource_owner_key=access_token,
+        resource_owner_secret=access_token_secret,
+    )
+    
+    # Example endpoint for national players, passing team id 3026
+    url = 'https://chpp.hattrick.org/chppxml.ashx?file=nationalplayers&teamID=3026'
+    
+    response = oauth.get(url)
+    
+    if response.status_code == 200:
+        xml_data = response.text
+        # You can parse XML or just display for now
+        return render(request, 'xml_display.html', {'xml_data': xml_data})
+    else:
+        return render(request, 'error.html', {'error': f'API error: {response.status_code}'})
+
+def get_players(request):
+    oauth = OAuth1(
+        config('HATTRICK_CONSUMER_KEY'),
+        client_secret=config('HATTRICK_CONSUMER_SECRET'),
+        resource_owner_key=request.session.get('oauth_token'),
+        resource_owner_secret=request.session.get('oauth_token_secret'),
+        signature_method='HMAC-SHA1'
+    )
+
+    url = 'https://chpp.hattrick.org/chppxml.ashx'
+    params = {
+        'file': 'players',
+        'version': '3.3'
+    }
+
+    response = requests.get(url, auth=oauth, params=params)
+    
+    if response.status_code == 200:
+        return HttpResponse(response.content, content_type='application/xml')
+    else:
+        return HttpResponse(f"Error {response.status_code}: {response.text}", status=response.status_code)
