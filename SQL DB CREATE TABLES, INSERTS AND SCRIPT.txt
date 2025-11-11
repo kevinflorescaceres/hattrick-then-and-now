@@ -1,0 +1,579 @@
+Create tables
+
+-- Tabla Equipos
+CREATE TABLE Equipos (
+    ID_TEAM SERIAL PRIMARY KEY,
+    Nombre VARCHAR(100),
+    Seccion VARCHAR(100),
+    Manager VARCHAR(100)
+);
+
+CREATE TABLE Partidos (
+    ID_MATCH BIGINT PRIMARY KEY,
+    Fecha TIMESTAMP NOT NULL,
+    Local_ID INT REFERENCES Equipos(ID_TEAM),
+    Goles_Local INT NULL,
+    Visita_ID INT REFERENCES Equipos(ID_TEAM),
+    Goles_Visita INT NULL,
+    Torneo VARCHAR(100)
+);
+
+INSERT INTO equipos (nombre, seccion, manager) VALUES
+('Estúpidamente Geniales F.C.', 'Boxef', 'KevindelosVientos'),
+('Los Danmucobois', 'Aplik', 'harrydeep'),
+('Monterrey T.I FC', 'Boxef', 'Knight-A'),
+('NoobsFC', 'Aplik', 'medelardo'),
+('Obsidiana', 'Boxef', 'Duff-Sheva'),
+('Que_SucedeFC', 'Aplik', 'Fopy91');
+
+------------------------QUERYS
+
+
+
+------------------HEAD2HEAD
+
+WITH params AS (
+    SELECT 
+        2 AS equipo1_id,  -- Los Danmucobois
+        5 AS equipo2_id   -- Obsidiana
+)
+SELECT
+    COUNT(*) AS Partidos_Jugados,
+    SUM(
+        CASE 
+            WHEN (p.Local_ID = params.equipo1_id AND p.Goles_Local > p.Goles_Visita) 
+              OR (p.Visita_ID = params.equipo1_id AND p.Goles_Visita > p.Goles_Local) 
+            THEN 1 ELSE 0 
+        END
+    ) AS Ganados_Equipo1,
+    SUM(
+        CASE 
+            WHEN p.Goles_Local = p.Goles_Visita THEN 1 ELSE 0 
+        END
+    ) AS Empates,
+    SUM(
+        CASE 
+            WHEN (p.Local_ID = params.equipo1_id AND p.Goles_Local < p.Goles_Visita) 
+              OR (p.Visita_ID = params.equipo1_id AND p.Goles_Visita < p.Goles_Local) 
+            THEN 1 ELSE 0 
+        END
+    ) AS Ganados_Equipo2,
+    SUM(
+        CASE 
+            WHEN p.Local_ID = params.equipo1_id THEN p.Goles_Local
+            WHEN p.Visita_ID = params.equipo1_id THEN p.Goles_Visita 
+        END
+    ) AS GF_Equipo1,
+    SUM(
+        CASE 
+            WHEN p.Local_ID = params.equipo1_id THEN p.Goles_Visita
+            WHEN p.Visita_ID = params.equipo1_id THEN p.Goles_Local 
+        END
+    ) AS GF_Equipo2,
+    SUM(
+        CASE 
+            WHEN p.Local_ID = params.equipo1_id THEN p.Goles_Local - p.Goles_Visita
+            WHEN p.Visita_ID = params.equipo1_id THEN p.Goles_Visita - p.Goles_Local 
+        END
+    ) AS Diferencia_Goles
+  
+FROM partidos p
+CROSS JOIN params
+WHERE (p.Local_ID = params.equipo1_id AND p.Visita_ID = params.equipo2_id)
+   OR (p.Local_ID = params.equipo2_id AND p.Visita_ID = params.equipo1_id);
+
+
+
+   -------------TABLA HISTORICA
+
+   WITH partidos_nombres AS (
+    SELECT
+        p.ID_MATCH,
+        el.Nombre AS Local,
+        ev.Nombre AS Visita,
+        p.Goles_Local,
+        p.Goles_Visita
+    FROM Partidos p
+    JOIN Equipos el ON p.Local_ID = el.ID_TEAM
+    JOIN Equipos ev ON p.Visita_ID = ev.ID_TEAM
+),
+stats_local AS (
+    SELECT 
+        Local AS equipo,
+        COUNT(*) FILTER (WHERE Goles_Local > Goles_Visita) AS ganados_local,
+        COUNT(*) FILTER (WHERE Goles_Local < Goles_Visita) AS derrotas_local,
+        COUNT(*) FILTER (WHERE Goles_Local = Goles_Visita) AS empates_local,
+        SUM(Goles_Local) AS gf_local,
+        SUM(Goles_Visita) AS gc_local
+    FROM partidos_nombres
+    GROUP BY Local
+),
+stats_visita AS (
+    SELECT 
+        Visita AS equipo,
+        COUNT(*) FILTER (WHERE Goles_Visita > Goles_Local) AS ganados_visita,
+        COUNT(*) FILTER (WHERE Goles_Visita < Goles_Local) AS derrotas_visita,
+        COUNT(*) FILTER (WHERE Goles_Visita = Goles_Local) AS empates_visita,
+        SUM(Goles_Visita) AS gf_visita,
+        SUM(Goles_Local) AS gc_visita
+    FROM partidos_nombres
+    GROUP BY Visita
+)
+SELECT 
+    e.Nombre AS equipo,
+    COALESCE(l.ganados_local,0) AS ganados_local,
+    COALESCE(v.ganados_visita,0) AS ganados_visita,
+    COALESCE(l.ganados_local,0) + COALESCE(v.ganados_visita,0) AS ganados,
+    COALESCE(l.empates_local,0) + COALESCE(v.empates_visita,0) AS empates,
+    COALESCE(l.derrotas_local,0) AS derrotas_local,
+    COALESCE(v.derrotas_visita,0) AS derrotas_visita,
+    COALESCE(l.derrotas_local,0) + COALESCE(v.derrotas_visita,0) AS derrotas,
+    COALESCE(l.gf_local,0) + COALESCE(v.gf_visita,0) AS gf,
+    COALESCE(l.gc_local,0) + COALESCE(v.gc_visita,0) AS gc,
+    (COALESCE(l.gf_local,0) + COALESCE(v.gf_visita,0)) - (COALESCE(l.gc_local,0) + COALESCE(v.gc_visita,0)) AS diferencia_goles,
+    (COALESCE(l.ganados_local,0) + COALESCE(v.ganados_visita,0)) * 3 +
+    (COALESCE(l.empates_local,0) + COALESCE(v.empates_visita,0)) AS puntos,
+    ROUND(
+        ((COALESCE(l.ganados_local,0) + COALESCE(v.ganados_visita,0)) * 3 +
+        (COALESCE(l.empates_local,0) + COALESCE(v.empates_visita,0)))::numeric / 
+        (GREATEST((COALESCE(l.ganados_local,0) + COALESCE(v.ganados_visita,0) +
+          COALESCE(l.derrotas_local,0) + COALESCE(v.derrotas_visita,0) +
+          COALESCE(l.empates_local,0) + COALESCE(v.empates_visita,0))*3,1)) * 100, 2
+    ) AS porcentaje_rendimiento,
+    (COALESCE(l.ganados_local,0) + COALESCE(v.ganados_visita,0) +
+     COALESCE(l.derrotas_local,0) + COALESCE(v.derrotas_visita,0) +
+     COALESCE(l.empates_local,0) + COALESCE(v.empates_visita,0)) AS partidos_jugados
+FROM Equipos e
+LEFT JOIN stats_local l ON e.Nombre = l.equipo
+LEFT JOIN stats_visita v ON e.Nombre = v.equipo
+ORDER BY e.Nombre;
+
+
+-------------------------------------------------------INSERTS
+
+INSERT INTO equipos (nombre, seccion, manager) VALUES
+('Estúpidamente Geniales F.C.', 'Boxef', 'KevindelosVientos'),
+('Los Danmucobois', 'Aplik', 'harrydeep'),
+('Monterrey T.I FC', 'Boxef', 'Knight-A'),
+('NoobsFC', 'Aplik', 'medelardo'),
+('Obsidiana', 'Boxef', 'Duff-Sheva'),
+('Que_SucedeFC', 'Aplik', 'Fopy91');
+
+inserts partidos
+
+INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_Visita, Torneo) VALUES
+(24613328, '2022-07-02 22:58', 4, 4, 6, 2, 'Jugar Relajados'),
+(24613327, '2022-07-02 22:58', 2, 1, 3, 2, 'Jugar Relajados'),
+(24613329, '2022-07-02 22:58', 1, 5, 5, 5, 'Jugar Relajados'),
+(24613340, '2022-02-14 22:58', 4, 2, 2, 3, 'Jugar Relajados'),
+(24613331, '2022-02-14 22:58', 3, 3, 1, 2, 'Jugar Relajados'),
+(24613330, '2022-02-14 22:58', 6, 5, 5, 2, 'Jugar Relajados'),
+(24613339, '2022-02-21 22:58', 2, 4, 6, 1, 'Jugar Relajados'),
+(24613341, '2022-02-21 22:58', 1, 4, 4, 0, 'Jugar Relajados'),
+(24613333, '2022-02-21 22:58', 5, 0, 3, 3, 'Jugar Relajados'),
+(24613335, '2022-02-28 22:58', 4, 2, 5, 2, 'Jugar Relajados'),
+(24613334, '2022-02-28 22:58', 2, 2, 1, 1, 'Jugar Relajados'),
+(24613332, '2022-02-28 22:58', 6, 4, 3, 1, 'Jugar Relajados'),
+(24613338, '2022-07-03 22:58', 1, 4, 6, 1, 'Jugar Relajados'),
+(24613336, '2022-07-03 22:58', 5, 0, 2, 1, 'Jugar Relajados'),
+(24613337, '2022-07-03 22:58', 3, 2, 4, 2, 'Jugar Relajados'),
+(24613343, '2022-03-14 22:58', 4, 1, 3, 2, 'Jugar Relajados'),
+(24613344, '2022-03-14 22:58', 2, 1, 5, 1, 'Jugar Relajados'),
+(24613342, '2022-03-14 22:58', 6, 4, 1, 3, 'Jugar Relajados'),
+(24613348, '2022-03-21 22:58', 1, 2, 2, 6, 'Jugar Relajados'),
+(24613346, '2022-03-21 22:58', 5, 5, 4, 1, 'Jugar Relajados'),
+(24613345, '2022-03-21 22:58', 3, 0, 6, 4, 'Jugar Relajados'),
+(24613350, '2022-03-28 22:58', 4, 1, 1, 2, 'Jugar Relajados'),
+(24613349, '2022-03-28 22:58', 3, 1, 5, 2, 'Jugar Relajados'),
+(24613347, '2022-03-28 22:58', 6, 1, 2, 5, 'Jugar Relajados'),
+(24613352, '2022-04-04 22:58', 2, 4, 4, 1, 'Jugar Relajados'),
+(24613353, '2022-04-04 22:58', 1, 4, 3, 0, 'Jugar Relajados'),
+(24613351, '2022-04-04 22:58', 5, 2, 6, 4, 'Jugar Relajados'),
+(24613355, '2022-11-04 22:58', 5, 4, 1, 2, 'Jugar Relajados'),
+(24613356, '2022-11-04 22:58', 3, 0, 2, 1, 'Jugar Relajados'),
+(24613354, '2022-11-04 22:58', 6, 6, 4, 3, 'Jugar Relajados');
+
+INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_Visita, Torneo) VALUES
+(25536625, '2022-03-05 00:37', 6, 2, 3, 1, 'Heladas'),
+(25536626, '2022-03-05 00:37', 4, 3, 5, 1, 'Heladas'),
+(25536628, '2022-03-05 00:37', 2, 3, 1, 1, 'Heladas'),
+(25536631, '2022-10-05 00:37', 6, 1, 4, 2, 'Heladas'),
+(25536627, '2022-10-05 00:37', 5, 1, 2, 3, 'Heladas'),
+(25536629, '2022-10-05 00:37', 3, 0, 1, 5, 'Heladas'),
+(25536630, '2022-05-17 00:37', 4, 2, 3, 4, 'Heladas'),
+(25536632, '2022-05-17 00:37', 2, 2, 6, 2, 'Heladas'),
+(25536633, '2022-05-17 00:37', 1, 0, 5, 2, 'Heladas'),
+(25536635, '2022-05-24 00:37', 6, 2, 1, 2, 'Heladas'),
+(25536636, '2022-05-24 00:37', 4, 1, 2, 2, 'Heladas'),
+(25536634, '2022-05-24 00:37', 3, 2, 5, 1, 'Heladas'),
+(25536637, '2022-05-31 00:37', 2, 0, 3, 2, 'Heladas'),
+(25536643, '2022-05-31 00:37', 1, 3, 4, 2, 'Heladas'),
+(25536638, '2022-05-31 00:37', 5, 1, 6, 3, 'Heladas'),
+(25536639, '2022-07-06 00:37', 6, 4, 5, 1, 'Heladas'),
+(25536640, '2022-07-06 00:37', 4, 1, 1, 2, 'Heladas'),
+(25536641, '2022-07-06 00:37', 3, 1, 2, 2, 'Heladas'),
+(25536645, '2022-06-14 00:37', 2, 3, 4, 3, 'Heladas'),
+(25536644, '2022-06-14 00:37', 1, 3, 6, 2, 'Heladas'),
+(25536642, '2022-06-14 00:37', 5, 0, 3, 0, 'Heladas'),
+(25536652, '2022-06-21 00:37', 6, 0, 2, 4, 'Heladas'),
+(25536647, '2022-06-21 00:37', 5, 5, 1, 5, 'Heladas'),
+(25536646, '2022-06-21 00:37', 3, 1, 4, 2, 'Heladas'),
+(25536650, '2022-06-28 00:37', 4, 3, 6, 0, 'Heladas'),
+(25536649, '2022-06-28 00:37', 2, 2, 5, 3, 'Heladas'),
+(25536648, '2022-06-28 00:37', 1, 2, 3, 5, 'Heladas'),
+(25536653, '2022-05-07 00:37', 1, 6, 2, 0, 'Heladas'),
+(25536654, '2022-05-07 00:37', 5, 5, 4, 2, 'Heladas'),
+(25536651, '2022-05-07 00:37', 3, 3, 6, 1, 'Heladas');
+
+INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_Visita, Torneo) VALUES
+(26786640, '2022-08-15 23:04', 4, 2, 5, 5, 'MANSAS STATS CTM'),
+(26786641, '2022-08-15 23:04', 1, 2, 6, 3, 'MANSAS STATS CTM'),
+(26786644, '2022-08-15 23:04', 3, 2, 2, 1, 'MANSAS STATS CTM'),
+(26786648, '2022-08-22 23:04', 4, 3, 1, 4, 'MANSAS STATS CTM'),
+(26786642, '2022-08-22 23:04', 6, 3, 3, 2, 'MANSAS STATS CTM'),
+(26786646, '2022-08-22 23:04', 5, 2, 2, 2, 'MANSAS STATS CTM'),
+(26786643, '2022-08-29 23:04', 1, 3, 5, 6, 'MANSAS STATS CTM'),
+(26786645, '2022-08-29 23:04', 3, 2, 4, 1, 'MANSAS STATS CTM'),
+(26786650, '2022-08-29 23:04', 2, 0, 6, 5, 'MANSAS STATS CTM'),
+(26786652, '2022-05-09 23:04', 4, 2, 2, 0, 'MANSAS STATS CTM'),
+(26786651, '2022-05-09 23:04', 1, 0, 3, 6, 'MANSAS STATS CTM'),
+(26786647, '2022-05-09 23:04', 5, 4, 6, 1, 'MANSAS STATS CTM'),
+(26786649, '2022-12-09 23:04', 3, 4, 5, 3, 'MANSAS STATS CTM'),
+(26786653, '2022-12-09 23:04', 2, 5, 1, 3, 'MANSAS STATS CTM'),
+(26786654, '2022-12-09 23:04', 6, 2, 4, 4, 'MANSAS STATS CTM'),
+(26786656, '2022-09-19 23:04', 4, 1, 6, 3, 'MANSAS STATS CTM'),
+(26786657, '2022-09-19 23:04', 1, 2, 2, 2, 'MANSAS STATS CTM'),
+(26786655, '2022-09-19 23:04', 5, 2, 3, 3, 'MANSAS STATS CTM'),
+(26786660, '2022-09-26 23:04', 3, 2, 1, 1, 'MANSAS STATS CTM'),
+(26786658, '2022-09-26 23:04', 2, 3, 4, 5, 'MANSAS STATS CTM'),
+(26786659, '2022-09-26 23:04', 6, 1, 5, 0, 'MANSAS STATS CTM'),
+(26786662, '2022-03-10 23:04', 4, 2, 3, 4, 'MANSAS STATS CTM'),
+(26786664, '2022-03-10 23:04', 6, 1, 2, 3, 'MANSAS STATS CTM'),
+(26786661, '2022-03-10 23:04', 5, 5, 1, 4, 'MANSAS STATS CTM'),
+(26786666, '2022-10-10 23:04', 1, 4, 4, 2, 'MANSAS STATS CTM'),
+(26786665, '2022-10-10 23:04', 3, 2, 6, 1, 'MANSAS STATS CTM'),
+(26786663, '2022-10-10 23:04', 2, 3, 5, 3, 'MANSAS STATS CTM'),
+(26786669, '2022-10-17 23:04', 2, 1, 3, 2, 'MANSAS STATS CTM'),
+(26786668, '2022-10-17 23:04', 6, 3, 1, 2, 'MANSAS STATS CTM'),
+(26786667, '2022-10-17 23:04', 5, 6, 4, 0, 'MANSAS STATS CTM');
+
+INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_Visita, Torneo) VALUES
+(28106488, '2022-12-12 23:28', 4, 3, 3, 3, 'Lloriqueos'),
+(28106489, '2022-12-12 23:28', 1, 3, 6, 4, 'Lloriqueos'),
+(28106497, '2022-12-12 23:28', 5, 0, 2, 3, 'Lloriqueos'),
+(28106491, '2022-12-19 23:28', 4, 5, 1, 1, 'Lloriqueos'),
+(28106502, '2022-12-19 23:28', 6, 4, 5, 3, 'Lloriqueos'),
+(28106490, '2022-12-19 23:28', 3, 0, 2, 1, 'Lloriqueos'),
+(28106492, '2022-12-26 23:28', 1, 3, 3, 3, 'Lloriqueos'),
+(28106496, '2022-12-26 23:28', 5, 2, 4, 2, 'Lloriqueos'),
+(28106493, '2022-12-26 23:28', 2, 2, 6, 2, 'Lloriqueos'),
+(28106500, '2023-02-01 23:28', 4, 0, 2, 5, 'Lloriqueos'),
+(28106495, '2023-02-01 23:28', 1, 2, 5, 5, 'Lloriqueos'),
+(28106498, '2023-02-01 23:28', 3, 4, 6, 3, 'Lloriqueos'),
+(28106494, '2023-09-01 23:28', 5, 3, 3, 2, 'Lloriqueos'),
+(28106501, '2023-09-01 23:28', 2, 4, 1, 3, 'Lloriqueos'),
+(28106499, '2023-09-01 23:28', 6, 1, 4, 3, 'Lloriqueos'),
+(28106505, '2023-01-16 23:28', 4, 1, 6, 2, 'Lloriqueos'),
+(28106504, '2023-01-16 23:28', 1, 4, 2, 1, 'Lloriqueos'),
+(28106503, '2023-01-16 23:28', 3, 2, 5, 4, 'Lloriqueos'),
+(28106508, '2023-01-23 23:28', 5, 5, 1, 1, 'Lloriqueos'),
+(28106507, '2023-01-23 23:28', 2, 4, 4, 0, 'Lloriqueos'),
+(28106506, '2023-01-23 23:28', 6, 0, 3, 2, 'Lloriqueos'),
+(28106510, '2023-01-30 23:28', 4, 0, 5, 1, 'Lloriqueos'),
+(28106511, '2023-01-30 23:28', 6, 3, 2, 0, 'Lloriqueos'),
+(28106509, '2023-01-30 23:28', 3, 6, 1, 2, 'Lloriqueos'),
+(28106514, '2023-06-02 23:28', 1, 4, 4, 4, 'Lloriqueos'),
+(28106513, '2023-06-02 23:28', 5, 1, 6, 0, 'Lloriqueos'),
+(28106512, '2023-06-02 23:28', 2, 3, 3, 3, 'Lloriqueos'),
+(28106516, '2023-02-13 23:28', 2, 3, 5, 4, 'Lloriqueos'),
+(28106517, '2023-02-13 23:28', 6, 2, 1, 4, 'Lloriqueos'),
+(28106515, '2023-02-13 23:28', 3, 4, 4, 3, 'Lloriqueos');
+
+INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_Visita, Torneo) VALUES
+(29395194, '2023-04-25 01:58', 4, 0, 5, 2, 'Hombres Sin Rostro'),
+(29395189, '2023-04-25 01:58', 1, 3, 6, 4, 'Hombres Sin Rostro'),
+(29395191, '2023-04-25 01:58', 3, 3, 2, 1, 'Hombres Sin Rostro'),
+(29395193, '2023-02-05 01:58', 4, 5, 1, 3, 'Hombres Sin Rostro'),
+(29395192, '2023-02-05 01:58', 6, 0, 3, 2, 'Hombres Sin Rostro'),
+(29395190, '2023-02-05 01:58', 5, 4, 2, 0, 'Hombres Sin Rostro'),
+(29395197, '2023-09-05 01:58', 1, 4, 5, 5, 'Hombres Sin Rostro'),
+(29395195, '2023-09-05 01:58', 3, 1, 4, 1, 'Hombres Sin Rostro'),
+(29395196, '2023-09-05 01:58', 2, 1, 6, 4, 'Hombres Sin Rostro'),
+(29395199, '2023-05-16 01:58', 4, 7, 2, 0, 'Hombres Sin Rostro'),
+(29395198, '2023-05-16 01:58', 1, 2, 3, 2, 'Hombres Sin Rostro'),
+(29395200, '2023-05-16 01:58', 5, 3, 6, 0, 'Hombres Sin Rostro'),
+(29395201, '2023-05-23 01:58', 3, 1, 5, 1, 'Hombres Sin Rostro'),
+(29395202, '2023-05-23 01:58', 2, 1, 1, 7, 'Hombres Sin Rostro'),
+(29395203, '2023-05-23 01:58', 6, 3, 4, 2, 'Hombres Sin Rostro'),
+(29395206, '2023-05-30 01:58', 4, 4, 6, 0, 'Hombres Sin Rostro'),
+(29395205, '2023-05-30 01:58', 1, 5, 2, 0, 'Hombres Sin Rostro'),
+(29395204, '2023-05-30 01:58', 5, 2, 3, 9, 'Hombres Sin Rostro'),
+(29395209, '2023-06-06 01:58', 3, 4, 1, 5, 'Hombres Sin Rostro'),
+(29395207, '2023-06-06 01:58', 2, 0, 4, 4, 'Hombres Sin Rostro'),
+(29395208, '2023-06-06 01:58', 6, 2, 5, 3, 'Hombres Sin Rostro'),
+(29395211, '2023-06-13 01:58', 4, 3, 3, 2, 'Hombres Sin Rostro'),
+(29395212, '2023-06-13 01:58', 6, 5, 2, 1, 'Hombres Sin Rostro'),
+(29395210, '2023-06-13 01:58', 5, 8, 1, 0, 'Hombres Sin Rostro'),
+(29395213, '2023-06-20 01:58', 1, 3, 4, 4, 'Hombres Sin Rostro'),
+(29395214, '2023-06-20 01:58', 3, 3, 6, 1, 'Hombres Sin Rostro'),
+(29395215, '2023-06-20 01:58', 2, 2, 5, 4, 'Hombres Sin Rostro'),
+(29395218, '2023-06-27 01:58', 2, 0, 3, 7, 'Hombres Sin Rostro'),
+(29395216, '2023-06-27 01:58', 6, 1, 1, 3, 'Hombres Sin Rostro'),
+(29395217, '2023-06-27 01:58', 5, 3, 4, 1, 'Hombres Sin Rostro');
+
+INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_Visita, Torneo) VALUES
+(30404352, '2023-07-25', 2, 0, 6, 4, 'El Retorno del HDP'),
+(30404351, '2023-07-25', 5, 6, 1, 0, 'El Retorno del HDP'),
+(30404353, '2023-07-25', 3, 0, 4, 3, 'El Retorno del HDP'),
+(30404356, '2023-01-08', 2, 0, 5, 4, 'El Retorno del HDP'),
+(30404355, '2023-01-08', 1, 2, 3, 2, 'El Retorno del HDP'),
+(30404354, '2023-01-08', 6, 2, 4, 1, 'El Retorno del HDP'),
+(30404357, '2023-08-08', 5, 3, 6, 3, 'El Retorno del HDP'),
+(30404358, '2023-08-08', 3, 1, 2, 5, 'El Retorno del HDP'),
+(30404359, '2023-08-08', 4, 1, 1, 4, 'El Retorno del HDP'),
+(30404360, '2023-08-15', 2, 5, 4, 3, 'El Retorno del HDP'),
+(30404362, '2023-08-15', 5, 6, 3, 1, 'El Retorno del HDP'),
+(30404361, '2023-08-15', 6, 0, 1, 2, 'El Retorno del HDP'),
+(30404363, '2023-08-22', 3, 2, 6, 1, 'El Retorno del HDP'),
+(30404365, '2023-08-22', 4, 1, 5, 2, 'El Retorno del HDP'),
+(30404366, '2023-08-22', 1, 3, 2, 5, 'El Retorno del HDP'),
+(30404367, '2023-08-29', 2, 1, 1, 4, 'El Retorno del HDP'),
+(30404368, '2023-08-29', 5, 5, 4, 1, 'El Retorno del HDP'),
+(30404364, '2023-08-29', 6, 1, 3, 2, 'El Retorno del HDP'),
+(30404371, '2023-05-09', 3, 1, 5, 3, 'El Retorno del HDP'),
+(30404370, '2023-05-09', 4, 5, 2, 3, 'El Retorno del HDP'),
+(30404369, '2023-05-09', 1, 4, 6, 3, 'El Retorno del HDP'),
+(30404373, '2023-12-09', 2, 2, 3, 4, 'El Retorno del HDP'),
+(30404374, '2023-12-09', 1, 1, 4, 4, 'El Retorno del HDP'),
+(30404372, '2023-12-09', 6, 1, 5, 4, 'El Retorno del HDP'),
+(30404377, '2023-09-19', 5, 7, 2, 2, 'El Retorno del HDP'),
+(30404376, '2023-09-19', 3, 1, 1, 1, 'El Retorno del HDP'),
+(30404375, '2023-09-19', 4, 2, 6, 1, 'El Retorno del HDP'),
+(30404379, '2023-09-26', 4, 1, 3, 2, 'El Retorno del HDP'),
+(30404380, '2023-09-26', 1, 2, 5, 6, 'El Retorno del HDP'),
+(30404378, '2023-09-26', 6, 3, 2, 4, 'El Retorno del HDP');
+
+INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_Visita, Torneo) VALUES
+(31714783, '2023-10-11', 4, 3, 3, 2, 'Copa Chiste'),
+(31714782, '2023-10-11', 2, 6, 5, 5, 'Copa Chiste'),
+(31714784, '2023-10-11', 6, 4, 1, 2, 'Copa Chiste'),
+(31714788, '2023-11-17', 4, 3, 2, 2, 'Copa Chiste'),
+(31714786, '2023-11-17', 5, 3, 6, 3, 'Copa Chiste'),
+(31714785, '2023-11-17', 3, 2, 1, 5, 'Copa Chiste'),
+(31714787, '2023-11-24', 2, 3, 3, 4, 'Copa Chiste'),
+(31714789, '2023-11-24', 6, 4, 4, 4, 'Copa Chiste'),
+(31714790, '2023-11-24', 1, 5, 5, 4, 'Copa Chiste'),
+(31714792, '2023-01-12', 4, 1, 1, 3, 'Copa Chiste'),
+(31714794, '2023-01-12', 2, 1, 6, 1, 'Copa Chiste'),
+(31714791, '2023-01-12', 3, 2, 5, 3, 'Copa Chiste'),
+(31714793, '2023-08-12', 6, 1, 3, 4, 'Copa Chiste'),
+(31714795, '2023-08-12', 1, 4, 2, 4, 'Copa Chiste'),
+(31714796, '2023-08-12', 5, 2, 4, 5, 'Copa Chiste'),
+(31714800, '2023-12-15', 4, 1, 5, 1, 'Copa Chiste'),
+(31714798, '2023-12-15', 2, 4, 1, 6, 'Copa Chiste'),
+(31714797, '2023-12-15', 3, 4, 6, 4, 'Copa Chiste'),
+(31714802, '2023-12-22', 6, 2, 2, 2, 'Copa Chiste'),
+(31714801, '2023-12-22', 1, 2, 4, 3, 'Copa Chiste'),
+(31714799, '2023-12-22', 5, 2, 3, 0, 'Copa Chiste'),
+(31714804, '2023-12-29', 4, 2, 6, 1, 'Copa Chiste'),
+(31714806, '2023-12-29', 5, 4, 1, 5, 'Copa Chiste'),
+(31714803, '2023-12-29', 3, 2, 2, 3, 'Copa Chiste'),
+(31714808, '2024-05-01', 2, 4, 4, 4, 'Copa Chiste'),
+(31714807, '2024-05-01', 6, 1, 5, 2, 'Copa Chiste'),
+(31714805, '2024-05-01', 1, 1, 3, 1, 'Copa Chiste'),
+(31714811, '2024-12-01', 1, 1, 6, 5, 'Copa Chiste'),
+(31714810, '2024-12-01', 5, 5, 2, 3, 'Copa Chiste'),
+(31714809, '2024-12-01', 3, 0, 4, 2, 'Copa Chiste');
+
+INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_Visita, Torneo) VALUES
+(32971074, '2024-08-03', 4, 1, 3, 4, 'QPMD'),
+(32971078, '2024-08-03', 2, 1, 6, 2, 'QPMD'),
+(32971075, '2024-08-03', 1, 6, 5, 2, 'QPMD'),
+(32971081, '2024-03-15', 4, 5, 2, 1, 'QPMD'),
+(32971077, '2024-03-15', 6, 3, 1, 6, 'QPMD'),
+(32971076, '2024-03-15', 3, 3, 5, 1, 'QPMD'),
+(32971080, '2024-03-22', 2, 2, 3, 3, 'QPMD'),
+(32971079, '2024-03-22', 1, 3, 4, 1, 'QPMD'),
+(32971083, '2024-03-22', 5, 5, 6, 3, 'QPMD'),
+(32971085, '2024-03-29', 4, 4, 5, 1, 'QPMD'),
+(32971086, '2024-03-29', 2, 4, 1, 2, 'QPMD'),
+(32971082, '2024-03-29', 3, 2, 6, 1, 'QPMD'),
+(32971084, '2024-05-04', 1, 1, 3, 2, 'QPMD'),
+(32971087, '2024-05-04', 5, 2, 2, 4, 'QPMD'),
+(32971088, '2024-05-04', 6, 2, 4, 6, 'QPMD'),
+(32971091, '2024-12-04', 4, 1, 6, 3, 'QPMD'),
+(32971090, '2024-12-04', 2, 3, 5, 5, 'QPMD'),
+(32971089, '2024-12-04', 3, 2, 1, 2, 'QPMD'),
+(32971094, '2024-04-19', 1, 4, 2, 5, 'QPMD'),
+(32971093, '2024-04-19', 5, 5, 4, 5, 'QPMD'),
+(32971092, '2024-04-19', 6, 1, 3, 3, 'QPMD'),
+(32971096, '2024-04-26', 4, 2, 1, 0, 'QPMD'),
+(32971095, '2024-04-26', 6, 3, 5, 3, 'QPMD'),
+(32971102, '2024-04-26', 3, 1, 2, 3, 'QPMD'),
+(32971099, '2024-03-05', 2, 2, 4, 7, 'QPMD'),
+(32971098, '2024-03-05', 1, 2, 6, 0, 'QPMD'),
+(32971097, '2024-03-05', 5, 3, 3, 2, 'QPMD'),
+(32971103, '2024-10-05', 5, 1, 1, 3, 'QPMD'),
+(32971101, '2024-10-05', 6, 2, 2, 4, 'QPMD'),
+(32971100, '2024-10-05', 3, 1, 4, 2, 'QPMD');
+
+INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_Visita, Torneo) VALUES
+(34112981, '2024-06-25 00:08', 2, 4, 4, 3, 'Antimufa'),
+(34112982, '2024-06-25 00:08', 1, 3, 3, 0, 'Antimufa'),
+(34112983, '2024-06-25 00:08', 6, 2, 5, 2, 'Antimufa'),
+(34112986, '2024-02-07 00:08', 2, 4, 1, 0, 'Antimufa'),
+(34112985, '2024-02-07 00:08', 3, 2, 6, 0, 'Antimufa'),
+(34112984, '2024-02-07 00:08', 4, 1, 5, 4, 'Antimufa'),
+(34112987, '2024-09-07 00:08', 1, 6, 4, 2, 'Antimufa'),
+(34112988, '2024-09-07 00:08', 6, 1, 2, 2, 'Antimufa'),
+(34112989, '2024-09-07 00:08', 5, 4, 3, 2, 'Antimufa'),
+(34112991, '2024-07-16 00:08', 2, 5, 5, 3, 'Antimufa'),
+(34112992, '2024-07-16 00:08', 1, 3, 6, 2, 'Antimufa'),
+(34112990, '2024-07-16 00:08', 4, 0, 3, 4, 'Antimufa'),
+(34112993, '2024-07-23 00:08', 6, 2, 4, 1, 'Antimufa'),
+(34112994, '2024-07-23 00:08', 5, 2, 1, 3, 'Antimufa'),
+(34112995, '2024-07-23 00:08', 3, 2, 2, 5, 'Antimufa'),
+(34112998, '2024-07-30 00:08', 2, 5, 3, 2, 'Antimufa'),
+(34112997, '2024-07-30 00:08', 1, 2, 5, 1, 'Antimufa'),
+(34112996, '2024-07-30 00:08', 4, 1, 6, 1, 'Antimufa'),
+(34113001, '2024-06-08 00:08', 6, 2, 1, 0, 'Antimufa'),
+(34113000, '2024-06-08 00:08', 5, 2, 2, 1, 'Antimufa'),
+(34112999, '2024-06-08 00:08', 3, 6, 4, 0, 'Antimufa'),
+(34113003, '2024-08-13 00:08', 2, 2, 6, 0, 'Antimufa'),
+(34113004, '2024-08-13 00:08', 3, 3, 5, 2, 'Antimufa'),
+(34113002, '2024-08-13 00:08', 4, 2, 1, 3, 'Antimufa'),
+(34113007, '2024-08-20 00:08', 1, 3, 2, 5, 'Antimufa'),
+(34113006, '2024-08-20 00:08', 6, 3, 3, 2, 'Antimufa'),
+(34113005, '2024-08-20 00:08', 5, 2, 4, 1, 'Antimufa'),
+(34113010, '2024-08-27 00:08', 5, 1, 6, 3, 'Antimufa'),
+(34113009, '2024-08-27 00:08', 3, 4, 1, 2, 'Antimufa'),
+(34113008, '2024-08-27 00:08', 4, 1, 2, 4, 'Antimufa');
+
+INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_Visita, Torneo) VALUES
+(35257789, '2024-10-12 21:50', 2, 2, 5, 2, 'Medio a Medio'),
+(35257780, '2024-10-12 21:50', 1, 5, 4, 4, 'Medio a Medio'),
+(35257781, '2024-10-12 21:50', 6, 1, 3, 1, 'Medio a Medio'),
+(35257782, '2024-10-19 21:50', 2, 2, 1, 3, 'Medio a Medio'),
+(35257784, '2024-10-19 21:50', 4, 2, 6, 5, 'Medio a Medio'),
+(35257783, '2024-10-19 21:50', 5, 3, 3, 3, 'Medio a Medio'),
+(35257788, '2024-10-26 21:50', 1, 2, 5, 3, 'Medio a Medio'),
+(35257785, '2024-10-26 21:50', 6, 4, 2, 2, 'Medio a Medio'),
+(35257786, '2024-10-26 21:50', 3, 4, 4, 1, 'Medio a Medio'),
+(35257790, '2024-11-02 21:50', 2, 3, 3, 5, 'Medio a Medio'),
+(35257792, '2024-11-02 21:50', 1, 4, 6, 4, 'Medio a Medio'),
+(35257787, '2024-11-02 21:50', 5, 4, 4, 0, 'Medio a Medio'),
+(35257791, '2024-11-09 21:50', 6, 1, 5, 2, 'Medio a Medio'),
+(35257793, '2024-11-09 21:50', 3, 3, 1, 2, 'Medio a Medio'),
+(35257794, '2024-11-09 21:50', 4, 3, 2, 7, 'Medio a Medio'),
+(35257799, '2024-11-16 21:50', 2, 3, 4, 2, 'Medio a Medio'),
+(35257796, '2024-11-16 21:50', 1, 1, 3, 4, 'Medio a Medio'),
+(35257795, '2024-11-16 21:50', 5, 5, 6, 2, 'Medio a Medio'),
+(35257801, '2024-11-23 21:50', 6, 1, 1, 4, 'Medio a Medio'),
+(35257797, '2024-11-23 21:50', 3, 4, 2, 1, 'Medio a Medio'),
+(35257798, '2024-11-23 21:50', 4, 3, 5, 3, 'Medio a Medio'),
+(35257802, '2024-11-30 21:50', 2, 1, 6, 4, 'Medio a Medio'),
+(35257805, '2024-11-30 21:50', 4, 3, 3, 4, 'Medio a Medio'),
+(35257800, '2024-11-30 21:50', 5, 3, 1, 1, 'Medio a Medio'),
+(35257806, '2024-12-07 21:50', 1, 7, 2, 0, 'Medio a Medio'),
+(35257804, '2024-12-07 21:50', 6, 1, 4, 3, 'Medio a Medio'),
+(35257803, '2024-12-07 21:50', 3, 4, 5, 2, 'Medio a Medio'),
+(35257809, '2024-12-14 21:50', 3, 2, 6, 2, 'Medio a Medio'),
+(35257808, '2024-12-14 21:50', 4, 2, 1, 3, 'Medio a Medio'),
+(35257807, '2024-12-14 21:50', 5, 2, 2, 3, 'Medio a Medio');
+
+INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_Visita, Torneo) VALUES
+(36490234, '2025-03-02', 2, 3, 1, 3, 'Ahi no Eraaa'),
+(36490233, '2025-03-02', 6, 3, 4, 2, 'Ahi no Eraaa'),
+(36490235, '2025-03-02', 5, 2, 3, 4, 'Ahi no Eraaa'),
+(36490239, '2025-10-02', 2, 4, 6, 3, 'Ahi no Eraaa'),
+(36490237, '2025-10-02', 4, 1, 5, 2, 'Ahi no Eraaa'),
+(36490236, '2025-10-02', 1, 2, 3, 2, 'Ahi no Eraaa'),
+(36490238, '2025-02-17', 6, 2, 1, 5, 'Ahi no Eraaa'),
+(36490240, '2025-02-17', 5, 3, 2, 2, 'Ahi no Eraaa'),
+(36490244, '2025-02-17', 3, 1, 4, 1, 'Ahi no Eraaa'),
+(36490245, '2025-02-24', 2, 1, 3, 3, 'Ahi no Eraaa'),
+(36490242, '2025-02-24', 6, 0, 5, 4, 'Ahi no Eraaa'),
+(36490241, '2025-02-24', 1, 2, 4, 2, 'Ahi no Eraaa'),
+(36490243, '2025-03-03', 5, 5, 1, 4, 'Ahi no Eraaa'),
+(36490246, '2025-03-03', 3, 1, 6, 4, 'Ahi no Eraaa'),
+(36490247, '2025-03-03', 4, 2, 2, 3, 'Ahi no Eraaa'),
+(36490250, '2025-10-03', 2, 6, 4, 0, 'Ahi no Eraaa'),
+(36490249, '2025-10-03', 6, 4, 3, 4, 'Ahi no Eraaa'),
+(36490248, '2025-10-03', 1, 2, 5, 3, 'Ahi no Eraaa'),
+(36490260, '2025-03-17', 5, 4, 6, 1, 'Ahi no Eraaa'),
+(36490252, '2025-03-17', 3, 4, 2, 4, 'Ahi no Eraaa'),
+(36490251, '2025-03-17', 4, 0, 1, 3, 'Ahi no Eraaa'),
+(36490261, '2025-03-24', 2, 2, 5, 0, 'Ahi no Eraaa'),
+(36490253, '2025-03-24', 4, 2, 3, 1, 'Ahi no Eraaa'),
+(36490257, '2025-03-24', 1, 2, 6, 3, 'Ahi no Eraaa'),
+(36490255, '2025-03-31', 6, 3, 2, 5, 'Ahi no Eraaa'),
+(36490256, '2025-03-31', 5, 4, 4, 5, 'Ahi no Eraaa'),
+(36490258, '2025-03-31', 3, 2, 1, 3, 'Ahi no Eraaa'),
+(36490262, '2025-07-04', 3, 0, 5, 3, 'Ahi no Eraaa'),
+(36490254, '2025-07-04', 4, 4, 6, 3, 'Ahi no Eraaa'),
+(36490259, '2025-07-04', 1, 0, 2, 4, 'Ahi no Eraaa');
+
+INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_Visita, Torneo) VALUES
+(37521417, '2025-05-25', 3, 3, 6, 3, 'Trofeo 2 de Mayo - San Segundo'),
+(37521426, '2025-05-25', 4, 2, 1, 2, 'Trofeo 2 de Mayo - San Segundo'),
+(37521424, '2025-05-25', 2, 4, 5, 2, 'Trofeo 2 de Mayo - San Segundo'),
+(37521419, '2025-01-06', 3, 5, 4, 3, 'Trofeo 2 de Mayo - San Segundo'),
+(37521425, '2025-01-06', 1, 3, 2, 0, 'Trofeo 2 de Mayo - San Segundo'),
+(37521418, '2025-01-06', 6, 8, 5, 3, 'Trofeo 2 de Mayo - San Segundo'),
+(37521422, '2025-08-06', 4, 2, 6, 2, 'Trofeo 2 de Mayo - San Segundo'),
+(37521421, '2025-08-06', 2, 4, 3, 1, 'Trofeo 2 de Mayo - San Segundo'),
+(37521423, '2025-08-06', 5, 0, 1, 4, 'Trofeo 2 de Mayo - San Segundo'),
+(37521416, '2025-06-15', 3, 6, 5, 1, 'Trofeo 2 de Mayo - San Segundo'),
+(37521420, '2025-06-15', 4, 0, 2, 2, 'Trofeo 2 de Mayo - San Segundo'),
+(37521415, '2025-06-15', 6, 1, 1, 4, 'Trofeo 2 de Mayo - San Segundo'),
+(37521428, '2025-06-22', 2, 3, 6, 2, 'Trofeo 2 de Mayo - San Segundo'),
+(37521429, '2025-06-22', 5, 1, 4, 2, 'Trofeo 2 de Mayo - San Segundo'),
+(37521427, '2025-06-22', 1, 4, 3, 3, 'Trofeo 2 de Mayo - San Segundo'),
+(37521432, '2025-06-29', 3, 0, 1, 0, 'Trofeo 2 de Mayo - San Segundo'),
+(37521431, '2025-06-29', 4, 3, 5, 0, 'Trofeo 2 de Mayo - San Segundo'),
+(37521430, '2025-06-29', 6, 4, 2, 3, 'Trofeo 2 de Mayo - San Segundo'),
+(37521434, '2025-06-07', 2, 5, 4, 2, 'Trofeo 2 de Mayo - San Segundo'),
+(37521435, '2025-06-07', 5, 4, 3, 1, 'Trofeo 2 de Mayo - San Segundo'),
+(37521433, '2025-06-07', 1, 3, 6, 0, 'Trofeo 2 de Mayo - San Segundo'),
+(37521437, '2025-07-13', 3, 4, 2, 3, 'Trofeo 2 de Mayo - San Segundo'),
+(37521441, '2025-07-13', 1, 4, 5, 0, 'Trofeo 2 de Mayo - San Segundo'),
+(37521436, '2025-07-13', 6, 1, 4, 8, 'Trofeo 2 de Mayo - San Segundo'),
+(37521438, '2025-07-20', 4, 2, 3, 2, 'Trofeo 2 de Mayo - San Segundo'),
+(37521439, '2025-07-20', 2, 0, 1, 3, 'Trofeo 2 de Mayo - San Segundo'),
+(37521440, '2025-07-20', 5, 4, 6, 0, 'Trofeo 2 de Mayo - San Segundo'),
+(37521444, '2025-07-27', 5, 6, 2, 0, 'Trofeo 2 de Mayo - San Segundo'),
+(37521443, '2025-07-27', 1, 2, 4, 5, 'Trofeo 2 de Mayo - San Segundo'),
+(37521442, '2025-07-27', 6, 0, 3, 3, 'Trofeo 2 de Mayo - San Segundo');
+
+INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_Visita, Torneo) VALUES
+(38647177, '2025-12-09', 2, 0, 5, 4, 'Copa Desmantelados'),
+(38647180, '2025-12-09', 1, 0, 6, 3, 'Copa Desmantelados'),
+(38647179, '2025-12-09', 3, 2, 4, 1, 'Copa Desmantelados'),
+(38647185, '2025-09-19', 2, 2, 1, 1, 'Copa Desmantelados'),
+(38647181, '2025-09-19', 6, 0, 3, 5, 'Copa Desmantelados'),
+(38647178, '2025-09-19', 5, 3, 4, 3, 'Copa Desmantelados'),
+(38647184, '2025-09-26', 1, 1, 5, 1, 'Copa Desmantelados'),
+(38647186, '2025-09-26', 3, 1, 2, 2, 'Copa Desmantelados'),
+(38647182, '2025-09-26', 4, 2, 6, 2, 'Copa Desmantelados'),
+(38647187, '2025-03-10', 2, 3, 4, 2, 'Copa Desmantelados'),
+(38647189, '2025-03-10', 1, 3, 3, 2, 'Copa Desmantelados'),
+(38647183, '2025-03-10', 5, 2, 6, 5, 'Copa Desmantelados'),
+(38647188, '2025-10-10', 3, 1, 5, 3, 'Copa Desmantelados'),
+(38647191, '2025-10-10', 4, 3, 1, 1, 'Copa Desmantelados'),
+(38647190, '2025-10-10', 6, 0, 2, 5, 'Copa Desmantelados'),
+(38647194, '2025-10-17', 2, 2, 6, 2, 'Copa Desmantelados'),
+(38647192, '2025-10-17', 1, 1, 4, 3, 'Copa Desmantelados'),
+(38647193, '2025-10-17', 5, 5, 3, 3, 'Copa Desmantelados'),
+(38647196, '2025-10-24', 3, 2, 1, 5, 'Copa Desmantelados'),
+(38647195, '2025-10-24', 4, 2, 2, 3, 'Copa Desmantelados'),
+(38647197, '2025-10-24', 6, 3, 5, 1, 'Copa Desmantelados'),
+(38647198, '2025-10-31', 2, 4, 3, 4, 'Copa Desmantelados'),
+(38647200, '2025-10-31', 6, 1, 4, 3, 'Copa Desmantelados'),
+(38647199, '2025-10-31', 5, 3, 1, 2, 'Copa Desmantelados'),
+(38647202, '2025-07-11', 1, 0, 2, 1, 'Copa Desmantelados'),
+(38647203, '2025-07-11', 3, 3, 6, 0, 'Copa Desmantelados'),
+(38647201, '2025-07-11', 4, 2, 5, 3, 'Copa Desmantelados'),
+(38647204, '2025-11-14', 4, NULL, 3, NULL, 'Copa Desmantelados'),
+(38647205, '2025-11-14', 6, NULL, 1, NULL, 'Copa Desmantelados'),
+(38647206, '2025-11-14', 5, NULL, 2, NULL, 'Copa Desmantelados');
+
