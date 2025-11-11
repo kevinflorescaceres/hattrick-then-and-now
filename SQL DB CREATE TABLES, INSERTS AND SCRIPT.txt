@@ -26,9 +26,20 @@ INSERT INTO equipos (nombre, seccion, manager) VALUES
 ('Obsidiana', 'Boxef', 'Duff-Sheva'),
 ('Que_SucedeFC', 'Aplik', 'Fopy91');
 
-------------------------QUERYS
+------------------------QUERYS TORNEO ESPECIFICO
 
-
+SELECT 
+    p.ID_MATCH,
+    e1.Nombre AS Local,
+    e2.Nombre AS Visitante,
+    p.Goles_Local,
+    p.Goles_Visita,
+    p.Fecha,
+    p.Torneo
+FROM Partidos p
+JOIN Equipos e1 ON p.Local_ID = e1.ID_TEAM
+JOIN Equipos e2 ON p.Visita_ID = e2.ID_TEAM
+WHERE p.Torneo = 'QPMD';
 
 ------------------HEAD2HEAD
 
@@ -576,4 +587,5 @@ INSERT INTO Partidos (ID_MATCH, Fecha, Local_ID, Goles_Local, Visita_ID, Goles_V
 (38647204, '2025-11-14', 4, NULL, 3, NULL, 'Copa Desmantelados'),
 (38647205, '2025-11-14', 6, NULL, 1, NULL, 'Copa Desmantelados'),
 (38647206, '2025-11-14', 5, NULL, 2, NULL, 'Copa Desmantelados');
+
 
