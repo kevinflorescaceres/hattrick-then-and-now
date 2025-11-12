@@ -132,3 +132,83 @@ LEFT JOIN stats_visita v ON e.Nombre = v.equipo
 ORDER BY e.Nombre;
 
 
+RESUMEN FECHAS APLIK VS BOXEF------
+
+WITH partidos_con_seccion AS (
+    SELECT 
+        p.id_match,
+        p.fecha::date AS fecha,
+        p.torneo,
+        el.nombre AS equipo_local,
+        ev.nombre AS equipo_visita,
+        p.goles_local,
+        p.goles_visita,
+        CASE WHEN el.id_team % 2 = 0 THEN 'Aplik' ELSE 'Boxef' END AS seccion_local,
+        CASE WHEN ev.id_team % 2 = 0 THEN 'Aplik' ELSE 'Boxef' END AS seccion_visita
+    FROM partidos p
+    JOIN equipos el ON p.local_id = el.id_team
+    JOIN equipos ev ON p.visita_id = ev.id_team
+),
+fechas_aplik_boxef AS (
+    SELECT 
+        fecha
+    FROM partidos_con_seccion
+    GROUP BY fecha
+    HAVING BOOL_AND(seccion_local <> seccion_visita)
+)
+SELECT 
+    p.fecha,
+    p.torneo,
+    p.equipo_local,
+    p.seccion_local,
+    p.goles_local,
+    p.goles_visita,
+    p.equipo_visita,
+    p.seccion_visita
+FROM partidos_con_seccion p
+JOIN fechas_aplik_boxef f ON p.fecha = f.fecha
+ORDER BY p.fecha, p.id_match;
+
+----------------------------------------HEAD 2 HEAD HISTORICO APLIK VS BOXEF
+
+WITH partidos_con_seccion AS (
+    SELECT 
+        p.id_match,
+        p.fecha::date AS fecha,
+        CASE WHEN el.id_team % 2 = 0 THEN 'Aplik' ELSE 'Boxef' END AS seccion_local,
+        CASE WHEN ev.id_team % 2 = 0 THEN 'Aplik' ELSE 'Boxef' END AS seccion_visita,
+        p.goles_local,
+        p.goles_visita
+    FROM partidos p
+    JOIN equipos el ON p.local_id = el.id_team
+    JOIN equipos ev ON p.visita_id = ev.id_team
+),
+fechas_aplik_boxef AS (
+    SELECT fecha
+    FROM partidos_con_seccion
+    GROUP BY fecha
+    HAVING BOOL_AND(seccion_local <> seccion_visita)
+),
+resumen_fecha AS (
+    SELECT 
+        fecha,
+        SUM(CASE WHEN seccion_local = 'Aplik' THEN goles_local
+                 WHEN seccion_visita = 'Aplik' THEN goles_visita END) AS goles_aplik,
+        SUM(CASE WHEN seccion_local = 'Boxef' THEN goles_local
+                 WHEN seccion_visita = 'Boxef' THEN goles_visita END) AS goles_boxef
+    FROM partidos_con_seccion
+    WHERE fecha IN (SELECT fecha FROM fechas_aplik_boxef)
+    GROUP BY fecha
+)
+SELECT
+    COUNT(*) AS partidos_jugados,               -- cada fecha cuenta como 1
+    SUM(CASE WHEN goles_aplik > goles_boxef THEN 1 ELSE 0 END) AS ganados_aplik,
+    SUM(CASE WHEN goles_aplik = goles_boxef THEN 1 ELSE 0 END) AS empates,
+    SUM(CASE WHEN goles_aplik < goles_boxef THEN 1 ELSE 0 END) AS ganados_boxef,
+    SUM(goles_aplik) AS gf_aplik,
+    SUM(goles_boxef) AS gf_boxef,
+    SUM(goles_aplik - goles_boxef) AS diferencia_goles
+FROM resumen_fecha;
+
+
+
