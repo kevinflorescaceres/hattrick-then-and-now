@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Head-to-Head</h1>
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <label>Equipo 1</label>
+        <select id="equipo1" class="form-select">
+            <option value="">Seleccione…</option>
+            {% for eq in equipos %}
+                <option value="{{ eq.id_team }}">{{ eq.nombre }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label>Equipo 2</label>
+        <select id="equipo2" class="form-select">
+            <option value="">Seleccione…</option>
+            {% for eq in equipos %}
+                <option value="{{ eq.id_team }}">{{ eq.nombre }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-4 d-flex align-items-end">
+        <button id="btnCompare" class="btn btn-primary w-100" type="button">Comparar</button>
+    </div>
+</div>
+
+<div id="error" class="mb-3"></div>
+
+<div id="result"></div>
+
+<h3 class="mt-4">Gráfico</h3>
+<div class="chart-container" style="position: relative; height: 240px; width: 100%; max-width: 700px;">
+
+    <canvas id="h2hChart" height="80"></canvas>
+</div>
+
+<h3 class="mt-4">Últimos partidos</h3>
+<div id="lastMatches"></div>
+
+<script>
+    document.getElementById("btnCompare").addEventListener("click", async () => {
+        document.getElementById("error").innerHTML = "";
+        const equipo1 = document.getElementById("equipo1").value;
+        const equipo2 = document.getElementById("equipo2").value;
+
+        if (!equipo1 || !equipo2) {
+            document.getElementById("error").innerHTML = '<div class="alert alert-warning">Seleccione ambos equipos.</div>';
+            return;
+        }
+        if (equipo1 === equipo2) {
+            document.getElementById("error").innerHTML = '<div class="alert alert-danger">Los equipos deben ser distintos.</div>';
+            return;
+        }
+
+        const res = await fetch("/api/headtohead", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({equipo1, equipo2})
+        });
+
+        const j = await res.json();
+
+        if (j.error) {
+            document.getElementById("error").innerHTML = `<div class="alert alert-danger">${j.error}</div>`;
+            return;
+        }
+
+        const stats = j.stats || {};
+        const names = j.names || {};
+        const matches = j.matches || [];
+
+        // Resultado simple
+        document.getElementById("result").innerHTML = `
+            <table class="table table-bordered w-auto">
+                <tr><th>Partidos Jugados</th><td>${stats.partidos ?? stats.partidos_jugados ?? 0}</td></tr>
+                <tr><th>Ganados ${names[equipo1] ?? 'Equipo 1'}</th><td>${stats.ganados1 ?? 0}</td></tr>
+                <tr><th>Empates</th><td>${stats.empates ?? 0}</td></tr>
+                <tr><th>Ganados ${names[equipo2] ?? 'Equipo 2'}</th><td>${stats.ganados2 ?? 0}</td></tr>
+                <tr><th>Goles ${names[equipo1] ?? 'Equipo 1'}</th><td>${stats.gf1 ?? 0}</td></tr>
+                <tr><th>Goles ${names[equipo2] ?? 'Equipo 2'}</th><td>${stats.gf2 ?? 0}</td></tr>
+            </table>
+        `;
+
+        // Gráfico
+        const ctx = document.getElementById("h2hChart");
+        if (window.h2hChartInstance) window.h2hChartInstance.destroy();
+        window.h2hChartInstance = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: [names[equipo1] || "Equipo 1", "Empates", names[equipo2] || "Equipo 2"],
+                datasets: [{
+                    label: "Resultados",
+                    data: [stats.ganados1 || 0, stats.empates || 0, stats.ganados2 || 0]
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        // Últimos partidos
+        let html = "<table class='table table-sm'><thead><tr><th>Fecha</th><th>Local</th><th>Score</th><th>Visita</th></tr></thead><tbody>";
+        for (const m of matches) {
+            html += `<tr>
+                <td>${m.fecha}</td>
+                <td>${m.local}</td>
+                <td>${m.goles_local} - ${m.goles_visita}</td>
+                <td>${m.visita}</td>
+            </tr>`;
+        }
+        html += "</tbody></table>";
+        document.getElementById("lastMatches").innerHTML = matches.length ? html : "<p>No hay partidos registrados.</p>";
+    });
+</script>
+
+{% endblock %}

@@ -1,0 +1,83 @@
+/* ------------------------------
+   Hattrick Theme
+------------------------------ */
+.ht-bg {
+    background: linear-gradient(180deg, #e9f7ec 0%, #d3efdb 100%);
+    min-height: 100vh;
+}
+
+.ht-title {
+    font-weight: 800;
+    color: #286b3f;
+    text-shadow: 1px 1px 0 #ffffff;
+}
+
+.ht-card {
+    border-radius: 14px;
+    border: 1px solid #b8d8c4;
+    background: #ffffff;
+}
+
+.ht-section-title {
+    color: #286b3f;
+    font-weight: 700;
+}
+
+
+/* ------------------------------
+   Ranking Table
+------------------------------ */
+
+.ranking-table th {
+    background: #2e7d4c !important;
+    color: white !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-bottom: 3px solid #245f3b !important;
+}
+
+.ranking-table th.asc::after {
+    content: " ▲";
+    font-size: 0.75rem;
+}
+
+.ranking-table th.desc::after {
+    content: " ▼";
+    font-size: 0.75rem;
+}
+
+.ranking-table td,
+.ranking-table th {
+    padding: 12px !important;
+    vertical-align: middle !important;
+}
+
+.ranking-table tbody tr:nth-child(even) {
+    background: #f7fdf8;
+}
+
+.ranking-table tbody tr:hover {
+    background: #e8f5ea !important;
+}
+
+
+/* ------------------------------
+   Goal Difference Colors
+------------------------------ */
+
+.diff {
+    font-weight: 700;
+}
+
+.diff.positive {
+    color: #1f8c3a;
+}
+
+.diff.negative {
+    color: #c62828;
+}
+
+.diff.neutral {
+    color: #6c757d;
+}
