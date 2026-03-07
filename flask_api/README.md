@@ -1,43 +1,65 @@
 # Flask API
 
-## Setup
+## Local setup
 
-### Prerequisites
+1. Create and activate a virtualenv.
+2. Install dependencies:
 
-Before setting up the project, make sure you have the following installed:
+```bash
+pip install -r requirements.txt
+```
 
-- Python 3.x
-- pip (Python package installer)
+3. Set environment variables (example):
 
-### Installation
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=hattrick_database
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_SSLMODE=prefer
+```
 
-1. Create a virtual environment:
+4. Run locally:
 
-    ```
-    python -m venv venv
-    ```
+```bash
+flask --app app run
+```
 
+## Deploy to Render + Supabase
 
-2. Activate the virtual environment:
+This repo includes a Render Blueprint file at `render.yaml` configured for the Flask API.
 
-    On macOS/Linux:
+### Option A: Blueprint deploy (recommended)
 
-        source venv/bin/activate
-        
+1. Push this repo to GitHub.
+2. In Render, click **New +** -> **Blueprint**.
+3. Select this repo; Render will detect `render.yaml` and create `hattrick-flask-api`.
+4. In the new service, add environment variables:
+   - `DATABASE_URL` = your Supabase Postgres connection string
+   - `DB_SSLMODE` = `require`
+5. Deploy.
 
-    On Windows:
+### Option B: Manual web service
 
-        venv\Scripts\activate
+1. In Render, click **New +** -> **Web Service** and connect the repo.
+2. Use these settings:
+   - Root Directory: `flask_api`
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `gunicorn --bind 0.0.0.0:$PORT app:app`
+3. Add environment variables:
+   - `DATABASE_URL` = your Supabase Postgres connection string
+   - `DB_SSLMODE` = `require`
+4. Deploy.
 
+## Environment variables supported
 
-3. Install the required dependencies:
+- `DATABASE_URL` (preferred in production)
+- `DB_SSLMODE` (`require` for Supabase)
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+- `DB_HOST`
+- `DB_PORT`
 
-    pip install -r requirements.txt
-
-
-4. Create the .env file, with this structure:
-    DB_HOST=localhost
-    DB_PORT=5432 # for postgresql
-    DB_NAME=hattrick-database # replace it with your database name
-    DB_USER=postgres # replace it with your db username
-    DB_PASSWORD=postgres # replace it with your db password
+If `DATABASE_URL` is present, the app uses it first.
