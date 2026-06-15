@@ -1,26 +1,74 @@
 /* ------------------------------
+   Design Tokens
+------------------------------ */
+:root {
+    /* Colors */
+    --color-primary:        #2e7d4c;
+    --color-primary-dark:   #245f3b;
+    --color-primary-deeper: #286b3f;
+    --color-primary-light:  #e8f5ea;
+    --color-primary-pale:   #dff0e5; /* darkened from #f7fdf8 for row-stripe contrast */
+    --color-bg-gradient-start: #e9f7ec;
+    --color-bg-gradient-end:   #d3efdb;
+    --color-card-border:    #b8d8c4;
+    --color-text-white:     #ffffff;
+    --color-success:        #1f8c3a;
+    --color-danger:         #c62828;
+    --color-neutral:        #6c757d;
+
+    /* Spacing */
+    --spacing-xs:  6px;
+    --spacing-sm:  8px;
+    --spacing-md:  12px;
+    --spacing-lg:  16px;
+
+    /* Typography */
+    --fw-semi-bold:  600;
+    --fw-bold:       700;
+    --fw-extra-bold: 800;
+    --fs-sm:         0.75rem;
+
+    /* Borders & Shadows */
+    --border-radius-sm:    8px;
+    --border-radius-md:    12px;
+    --border-radius-card:  14px;
+    --border-width-accent: 3px;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.10);
+
+    /* Layout */
+    --layout-max-width: 1100px;
+}
+
+
+/* ------------------------------
    Hattrick Theme
 ------------------------------ */
 .ht-bg {
-    background: linear-gradient(180deg, #e9f7ec 0%, #d3efdb 100%);
+    background: linear-gradient(180deg, var(--color-bg-gradient-start) 0%, var(--color-bg-gradient-end) 100%);
     min-height: 100vh;
 }
 
 .ht-title {
-    font-weight: 800;
-    color: #286b3f;
-    text-shadow: 1px 1px 0 #ffffff;
+    font-weight: var(--fw-extra-bold);
+    color: var(--color-primary-deeper);
+    text-shadow: 1px 1px 0 var(--color-text-white);
 }
 
 .ht-card {
-    border-radius: 14px;
-    border: 1px solid #b8d8c4;
-    background: #ffffff;
+    border-radius: var(--border-radius-card);
+    border: 1px solid var(--color-card-border);
+    background: var(--color-text-white);
+    box-shadow: var(--shadow-md);
 }
 
 .ht-section-title {
-    color: #286b3f;
-    font-weight: 700;
+    color: var(--color-primary-deeper);
+    font-weight: var(--fw-bold);
+}
+
+.ht-container {
+    max-width: var(--layout-max-width);
 }
 
 
@@ -28,37 +76,57 @@
    Ranking Table
 ------------------------------ */
 
-.ranking-table th {
-    background: #2e7d4c !important;
-    color: white !important;
-    font-weight: 600;
+.ranking-table thead th {
+    background: var(--color-primary);
+    color: var(--color-text-white);
+    font-weight: var(--fw-semi-bold);
     text-transform: uppercase;
     cursor: pointer;
-    border-bottom: 3px solid #245f3b !important;
+    border-bottom: var(--border-width-accent) solid var(--color-primary-dark);
+}
+
+.ranking-table thead th:focus-visible {
+    outline: 2px solid var(--color-text-white);
+    outline-offset: -3px;
 }
 
 .ranking-table th.asc::after {
     content: " ▲";
-    font-size: 0.75rem;
+    font-size: var(--fs-sm);
 }
 
 .ranking-table th.desc::after {
     content: " ▼";
-    font-size: 0.75rem;
+    font-size: var(--fs-sm);
 }
 
 .ranking-table td,
 .ranking-table th {
-    padding: 12px !important;
-    vertical-align: middle !important;
+    padding: var(--spacing-md);
+    vertical-align: middle;
+}
+
+.ranking-table tbody tr {
+    transition: background-color 0.2s ease;
 }
 
 .ranking-table tbody tr:nth-child(even) {
-    background: #f7fdf8;
+    background: var(--color-primary-pale);
 }
 
 .ranking-table tbody tr:hover {
-    background: #e8f5ea !important;
+    background: var(--color-primary-light);
+}
+
+
+/* ------------------------------
+   Chart Container
+------------------------------ */
+.chart-container {
+    position: relative;
+    height: 240px;
+    width: 100%;
+    max-width: 700px;
 }
 
 
@@ -67,17 +135,60 @@
 ------------------------------ */
 
 .diff {
-    font-weight: 700;
+    font-weight: var(--fw-bold);
 }
 
 .diff.positive {
-    color: #1f8c3a;
+    color: var(--color-success);
 }
 
 .diff.negative {
-    color: #c62828;
+    color: var(--color-danger);
 }
 
 .diff.neutral {
-    color: #6c757d;
+    color: var(--color-neutral);
+}
+
+
+/* ------------------------------
+   Focus Styles (Accessibility)
+------------------------------ */
+button:focus-visible,
+.btn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+input:focus-visible,
+select:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+
+/* ------------------------------
+   Responsive
+------------------------------ */
+@media (max-width: 768px) {
+    .ranking-table td,
+    .ranking-table th {
+        padding: var(--spacing-sm);
+    }
+
+    .chart-container {
+        height: 200px;
+    }
+}
+
+@media (max-width: 480px) {
+    .ranking-table td,
+    .ranking-table th {
+        padding: var(--spacing-xs);
+        font-size: var(--fs-sm);
+    }
+
+    .chart-container {
+        height: 180px;
+    }
 }
